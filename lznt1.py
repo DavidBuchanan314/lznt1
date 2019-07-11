@@ -1,18 +1,17 @@
 import struct
-import sys
 import copy
 
 def _decompress_chunk(chunk):
     size = len(chunk)
-    out = ''
+    out = b""
     pow2 = 0x10
     while chunk:
-        flags = ord(chunk[0])
+        flags = chunk[0]
         chunk = chunk[1:]
         for i in range(8):
             out_start = len(out)
             if not (flags >> i & 1):
-                out += chunk[0]
+                out += chunk[:1]
                 chunk = chunk[1:]
             else:
                 flag = struct.unpack('<H', chunk[:2])[0]
@@ -28,7 +27,7 @@ def _decompress_chunk(chunk):
                 offset = (flag >> o_shift) + 1
 
                 if length >= offset:
-                    tmp = out[-offset:] * (0xFFF / len(out[-offset:]) + 1)
+                    tmp = out[-offset:] * (0xFFF // len(out[-offset:]) + 1)
                     out += tmp[:length]
                 else:
                     out += out[-offset:-offset+length]
@@ -38,11 +37,11 @@ def _decompress_chunk(chunk):
     return out
 
 def decompress(buf, length_check=True):
-    out = ''
+    out = b""
     while buf:
         header = struct.unpack('<H', buf[:2])[0]
         length = (header & 0xFFF) + 1
-        if length_check and length > len(buf[2:]):
+        if length_check and length > len(buf)-2:
             raise ValueError('invalid chunk length')
         else:
             chunk = buf[2:2+length]
@@ -63,7 +62,7 @@ def _find(src, target, max_len):
         tmp_offset = len(src) - offset
         tmp_length = i
         if tmp_offset == tmp_length:
-            tmp = src[offset:] * (0xFFF / len(src[offset:]) + 1)
+            tmp = src[offset:] * (0xFFF // len(src[offset:]) + 1)
             for j in range(i, max_len+1):
                 offset = tmp.rfind(target[:j])
                 if offset == -1:
@@ -79,13 +78,13 @@ def _find(src, target, max_len):
 
 def _compress_chunk(chunk):
     blob = copy.copy(chunk)
-    out = ''
+    out = b""
     pow2 = 0x10
     l_mask3 = 0x1002
     o_shift = 12
     while len(blob) > 0:
         bits = 0
-        tmp = ''
+        tmp = b""
         for i in range(8):
             bits >>= 1
             while pow2 < (len(chunk) - len(blob)):
@@ -110,7 +109,7 @@ def _compress_chunk(chunk):
                 bits |= 0x80 # set the highest bit
                 blob = blob[length:]
             else:
-                tmp += blob[0]
+                tmp += blob[:1]
                 blob = blob[1:]
             if len(blob) == 0:
                 break
@@ -121,7 +120,7 @@ def _compress_chunk(chunk):
     return out
 
 def compress(buf, chunk_size=0x1000):
-    out = ''
+    out = b""
     while buf:
         chunk = buf[:chunk_size]
         compressed = _compress_chunk(chunk)
